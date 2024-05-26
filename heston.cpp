@@ -12,11 +12,6 @@
 
 using namespace boost::property_tree;
 
-double dWT(){
-    int num = 10;
-    double dw = (rand() % (2*num + 1)) - num;
-    return dw/100.0;
-}
 
 // Enter polygon key into this function
 std::string URL(std::string ticker)
@@ -61,7 +56,7 @@ std::string GET(std::string ticker) {
     return readBuffer;
 }
 
-void CYCLONE(ptree df, std::vector<double> & prices, bool results){
+void TYPHOON(ptree df, std::vector<double> & prices, bool results){
     for(ptree::const_iterator it = df.begin(); it != df.end(); ++it){
         if(results == true){
             for(ptree::const_iterator jt = it->second.begin(); jt != it->second.end(); ++jt){
@@ -71,23 +66,26 @@ void CYCLONE(ptree df, std::vector<double> & prices, bool results){
             }
         }
         if(it->first == "results"){
-            CYCLONE(it->second, std::ref(prices), true);
+            TYPHOON(it->second, std::ref(prices), true);
         }
     }
 }
 
-ptree JSON(std::string message){
-    std::stringstream fp(message);
+ptree JSON(std::string resp){
+    std::stringstream ss(resp);
     ptree result;
-    read_json(fp, result);
+    read_json(ss, result);
     return result;
 }
 
-std::vector<double> Computer(std::vector<double> close, double dt){
+std::vector<double> Computer(std::vector<double> prices, double dt){
+    
+    std::vector<double> result, sim_vol, ror;
+
     auto mean = [](std::vector<double> x){
         double total = 0;
-        for(auto & t : x){
-            total += t;
+        for(auto & i : x){
+            total += i;
         }
         return total / (double) x.size();
     };
@@ -95,18 +93,20 @@ std::vector<double> Computer(std::vector<double> close, double dt){
     auto variance = [&](std::vector<double> x){
         double total = 0;
         double mu = mean(x);
-        for(auto & t : x){
-            total += pow(t - mu, 2);
+        for(auto & i : x){
+            total += pow(i - mu, 2);
         }
         return total / ((double) x.size() - 1);
     };
-    
-    std::vector<double> result, ror, sim_vol;
-    for(int i = 1; i < close.size(); ++i){
-        ror.push_back(close[i]/close[i-1] - 1.0);
+
+    for(int i = 1; i < prices.size(); ++i){
+        ror.push_back(prices[i]/prices[i-1] - 1.0);
     }
 
-    int window = 75;
+    double price = prices[prices.size() - 1];
+    double drift = mean(ror);
+
+    int window = 50;
     for(int i = window; i < ror.size(); ++i){
         std::vector<double> hold = {ror.begin() + (i - window), ror.begin() + i};
         double vol = variance(hold);
@@ -115,8 +115,9 @@ std::vector<double> Computer(std::vector<double> close, double dt){
 
     double theta = sqrt(mean(sim_vol));
     double sigma = sqrt(variance(sim_vol));
+    double mu_vol = mean(sim_vol);
 
-    double top = 0, bot = 0, mu_vol = mean(sim_vol);
+    double top = 0, bot = 0;
     for(int i = 1; i < sim_vol.size(); ++i){
         top += (sim_vol[i] - mu_vol)*(sim_vol[i-1] - mu_vol);
         bot += pow(sim_vol[i] - mu_vol, 2);
@@ -124,56 +125,58 @@ std::vector<double> Computer(std::vector<double> close, double dt){
 
     double kappa = -log(top/bot)/dt;
 
-    double drift = mean(ror);
+    result = {kappa, theta, sigma, price, drift};
 
-    result = {kappa, theta, sigma, close[close.size() - 1], drift};
     return result;
+}
+
+double dWT(){
+    int num = 10;
+    double dw = (rand() % (2*num + 1)) - num;
+    return dw/100.0;
 }
 
 int main()
 {
     srand(time(NULL));
 
-    std::string ticker = "MSFT";
+    std::string ticker = "AMZN";
     std::string response = GET(ticker);
-    std::vector<double> prices;
 
-    CYCLONE(JSON(response), std::ref(prices), false);
+    std::vector<double> prices;
+    TYPHOON(JSON(response), std::ref(prices), false);
 
     double t = 30;
-    int n = 1000;
-    int sims = 100;
+    int n = 1500;
+    int p = 150;
     double dt = t / (double) n;
 
     std::vector<double> params = Computer(prices, dt);
-    
-    int Long = 0, Short = 0;
+
+    int Go_Long = 0, Go_Short = 0;
 
     for(int k = 0; k < 100; ++k){
-        double forecasted = 0;
-        for(int i = 0; i < sims; ++i){
+        double forecast_price = 0;
+        for(int i = 0; i < p; ++i){
             double S0 = params[3];
-            double v0 = 0.1;
+            double v0 = 0.3;
             for(int j = 0; j < n; ++j){
-                double DWT = dWT();
-                v0 += params[0]*(params[1] - v0)*dt + params[2]*sqrt(v0)*-0.5*DWT;
-                S0 += params[4]*S0*dt + sqrt(v0)*S0*DWT;
+                double dw = dWT();
+                v0 += params[0]*(params[1] - v0)*dt + params[2]*sqrt(v0)*dw;
+                S0 += params[4]*S0*dt + sqrt(v0)*S0*dw;
             }
-            forecasted += S0;
+            forecast_price += S0;
         }
-
-        forecasted /= (double) sims;
-
-        if(params[3] <= forecasted){
-            Long += 1;
+        forecast_price /= (double) p;
+        if(params[3] <= forecast_price){
+            Go_Long += 1;
         } else {
-            Short += 1;
+            Go_Short += 1;
         }
-
-        std::cout << "Long: " << Long << "\tShort: " << Short << std::endl;
     }
+
+    std::cout << "Long: " << Go_Long << "\tShort: " << Go_Short << "\tCurrent Stock Price: " << params[3] << std::endl;
     
-    std::cout << "Todays Stock Price: " << params[3] << std::endl;
 
     return 0;
 }
