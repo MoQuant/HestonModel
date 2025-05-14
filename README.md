@@ -1,4 +1,10 @@
-# HestonModel
-heston model repo
+# Heston Model
 
-In order for this to work you will need a token from MarketData.app's API and you will need a key with Polygon.io. Both of these keys are free with the platforms
+# Description
+In this repository I have C++ code which runs the Heston Model on inputted stocks to see whether it is worth going long or short into them. I am using Implied Volatility as an input to the stochastic volatility equation in this model. The output is the ratio between long and short signals
+
+# Video Link
+[YouTube Video](https://www.youtube.com/watch?v=nFS3EMe8HMU)
+
+# Preview
+![alt](https://github.com/MoQuant/HestonModel/blob/main/J.png)
