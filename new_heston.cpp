@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <time.h>
 
+// The only difference between this code and heston.cpp is the added import of weighted Implied Volatility
+
 using namespace boost::property_tree;
 
 // Imports Options Chain from MarketData.app's API
@@ -195,6 +197,7 @@ int main()
     std::string ticker = "HD";
     std::string response = GET(URL(ticker));
 
+    // Fetches weighted Implied Volatility
     double iv = ImpliedVolatility(ticker, "2024-08-23");
 
     std::vector<double> prices;
